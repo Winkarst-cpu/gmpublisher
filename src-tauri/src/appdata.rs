@@ -312,8 +312,7 @@ impl<R: tauri::Runtime> tauri::plugin::Plugin<R> for Plugin {
 		sanitized.sanitize();
 		*app_data!().settings.write() = sanitized;
 
-		// Trim off nul byte
-		let mut default_ignore: Vec<String> = crate::gma::DEFAULT_IGNORE.iter().map(|x| x[0..x.len() - 1].to_string()).collect();
+		let mut default_ignore: Vec<String> = crate::gma::DEFAULT_IGNORE.iter().map(|x| x.to_string()).collect();
 		default_ignore.sort();
 
 		app_data!().open_count.increment();
