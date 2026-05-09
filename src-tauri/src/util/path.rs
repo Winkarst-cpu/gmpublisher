@@ -156,8 +156,7 @@ pub fn open_file_location<P: AsRef<Path>>(path: P) {
 		#[cfg(target_os = "linux")]
 		{
 			let path = path.to_string_lossy().into_owned();
-			if path.contains(",") {
-				// see https://gitlab.freedesktop.org/dbus/dbus/-/issues/76
+			if path.contains(',') || path.contains('"') || path.contains('\\') {
 				let new_path = match std::fs::metadata(&path).unwrap().is_dir() {
 					true => path,
 					false => {

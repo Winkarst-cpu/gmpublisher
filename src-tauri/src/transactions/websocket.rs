@@ -162,14 +162,13 @@ impl TransactionServer {
 				}
 
 				OwnedMessage::Binary(bytes) => {
-					if &bytes[0..0] == CANCEL_TRANSACTION {
-						match &bytes[1..9].try_into() {
-							Ok(bytes) => {
-								super::cancel_transaction(u32::from_be_bytes(*bytes));
-								dprintln!("[1] WebSocket Invalid Message: {:?}", bytes);
+					if bytes.len() >= 5 && bytes.first() == CANCEL_TRANSACTION.first() {
+						match <[u8; 4]>::try_from(&bytes[1..5]) {
+							Ok(id_bytes) => {
+								super::cancel_transaction(u32::from_be_bytes(id_bytes));
 							}
-							Err(bytes) => {
-								dprintln!("[0] WebSocket Invalid Message: {:?}", bytes);
+							Err(_) => {
+								dprintln!("WebSocket Invalid Cancel Message: {:?}", bytes);
 								continue;
 							}
 						}
