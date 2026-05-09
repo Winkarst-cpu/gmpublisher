@@ -341,10 +341,16 @@ impl ExtractGMAImmut for GMAFile {
 		open_after_extract: bool,
 		handle: Option<GMAReader>,
 	) -> Result<PathBuf, GMAError> {
-		let mut path = app_data!().temp_dir().to_owned();
-		path.push("gmpublisher");
-		path.push(&self.extracted_name);
+		let mut base = app_data!().temp_dir().to_owned();
+		base.push("gmpublisher");
+		base.push(&self.extracted_name);
+
+		let mut path = base.clone();
 		path.push(&entry_path);
+
+		if !path.starts_with(&base) {
+			return Err(GMAError::FormatError);
+		}
 
 		let mut handle = match handle {
 			Some(handle) => handle,
