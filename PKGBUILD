@@ -1,8 +1,9 @@
 # Maintainer: Lythium max@lythium.dev
+# Contributor: Winkarst-cpu
 
 pkgname=gmpublisher-bin
 _realname=gmpublisher
-pkgver=2.11.3
+pkgver=2.11.2
 pkgrel=1
 pkgdesc="Workshop Publishing Utility for Garry's Mod, written in Rust & Svelte and powered by Tauri"
 arch=('x86_64')
@@ -15,7 +16,7 @@ conflicts=("${_realname}")
 source=("${_realname}_linux64.zip::https://github.com/WilliamVenner/${_realname}/releases/download/${pkgver}/${_realname}_linux64.zip"
         "LICENSE::https://raw.githubusercontent.com/WilliamVenner/${_realname}/${pkgver}/LICENSE"
         "${_realname}.png::https://raw.githubusercontent.com/WilliamVenner/${_realname}/${pkgver}/src-tauri/icons/128x128.png")
-sha256sums=('3557f4117aed96652c76590f5727953868a377b1dee6391cdc0e14decd36252d'
+sha256sums=('01b7113f5e8106723febcb5ef3764d085bedf6c6d8d5c3fef1c6fceb13d8eb80'
             'd1bfc7a749950924bd5d27dee610ac8933f96badc14a774be796e986b9dcd3aa'
             '5e9fb667ca5095013921970c58b53f984f4ba0836edf6b78876e03861b5f4265')
 
@@ -59,6 +60,3 @@ post_upgrade() {
 post_remove() {
   /usr/bin/gtk-update-icon-cache -q -t applications -f /usr/share/icons/hicolor
 }
-sha256sums=('3557f4117aed96652c76590f5727953868a377b1dee6391cdc0e14decd36252d'
-            'd1bfc7a749950924bd5d27dee610ac8933f96badc14a774be796e986b9dcd3aa'
-            '5e9fb667ca5095013921970c58b53f984f4ba0836edf6b78876e03861b5f4265')
