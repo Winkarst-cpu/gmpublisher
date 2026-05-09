@@ -20,14 +20,14 @@ fn is_unsafe_entry_path(path: &str) -> bool {
 	if path.is_empty() {
 		return true;
 	}
-	if path.bytes().any(|b| b == 0 || b == b':') {
+	if path.bytes().any(|b| b == 0 || b == b':' || b == b'\\') {
 		return true;
 	}
-	if path.starts_with('/') || path.starts_with('\\') {
+	if path.starts_with('/') {
 		return true;
 	}
-	for segment in path.split(|c| c == '/' || c == '\\') {
-		if segment.is_empty() || segment == "." || segment == ".." {
+	for segment in path.split('/') {
+		if segment.is_empty() || segment == "." || segment == ".." || segment != segment.trim() {
 			return true;
 		}
 	}
@@ -185,6 +185,23 @@ mod tests {
 			"\\Program Files (x86)\\Steam\\steamapps\\common\\GarrysMod\\garrysmod\\lua\\bin\\evil.dll"
 		));
 		assert!(is_unsafe_entry_path("\\evil.dll"));
+	}
+
+	#[test]
+	fn rejects_embedded_backslash() {
+		assert!(is_unsafe_entry_path(
+			"Program Files (x86)\\Steam\\steamapps\\common\\GarrysMod\\garrysmod\\lua\\bin\\haha.dll"
+		));
+		assert!(is_unsafe_entry_path("lua\\autorun\\evil.lua"));
+		assert!(is_unsafe_entry_path("foo\\bar"));
+	}
+
+	#[test]
+	fn rejects_segment_whitespace() {
+		assert!(is_unsafe_entry_path(" Files (x86)/Steam/foo"));
+		assert!(is_unsafe_entry_path("lua/ autorun/foo.lua"));
+		assert!(is_unsafe_entry_path("lua/autorun /foo.lua"));
+		assert!(is_unsafe_entry_path("\tfoo/bar"));
 	}
 
 	#[test]
