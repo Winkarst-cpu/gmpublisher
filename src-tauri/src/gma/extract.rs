@@ -299,8 +299,13 @@ impl ExtractGMAImmut for GMAFile {
 							return Err(GMAError::Cancelled);
 						}
 
-						// FIXME count errors, check if errors == number of entries, return an error instead of finished
-						ignore! { GMAFile::stream_entry_bytes(&mut handle, entries_start, &dest_path.join(entry_path), entry) };
+						let final_path = dest_path.join(entry_path);
+						if !final_path.starts_with(&dest_path) {
+							transaction.error("Illegal path", entry_path.clone());
+						} else {
+							// FIXME count errors, check if errors == number of entries, return an error instead of finished
+							ignore! { GMAFile::stream_entry_bytes(&mut handle, entries_start, &final_path, entry) };
+						}
 
 						let i = i.fetch_add(1, Ordering::AcqRel) + 1;
 						transaction.progress((i as f64) / entries_len_f);
@@ -336,10 +341,16 @@ impl ExtractGMAImmut for GMAFile {
 		open_after_extract: bool,
 		handle: Option<GMAReader>,
 	) -> Result<PathBuf, GMAError> {
-		let mut path = app_data!().temp_dir().to_owned();
-		path.push("gmpublisher");
-		path.push(&self.extracted_name);
+		let mut base = app_data!().temp_dir().to_owned();
+		base.push("gmpublisher");
+		base.push(&self.extracted_name);
+
+		let mut path = base.clone();
 		path.push(&entry_path);
+
+		if !path.starts_with(&base) {
+			return Err(GMAError::FormatError);
+		}
 
 		let mut handle = match handle {
 			Some(handle) => handle,

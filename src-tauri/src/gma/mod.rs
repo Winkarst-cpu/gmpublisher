@@ -288,6 +288,13 @@ impl GMAFile {
 			extracted_name.pop();
 		}
 
+		if extracted_name.is_empty() {
+			extracted_name = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+				Ok(unix) => format!("gmpublisher_extracted_{}", unix.as_secs()),
+				Err(_) => "gmpublisher_extracted".into(),
+			};
+		}
+
 		self.extracted_name = extracted_name;
 	}
 }

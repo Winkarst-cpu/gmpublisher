@@ -16,6 +16,24 @@ macro_rules! safe_read {
 	};
 }
 
+fn is_unsafe_entry_path(path: &str) -> bool {
+	if path.is_empty() {
+		return true;
+	}
+	if path.bytes().any(|b| b == 0 || b == b':' || b == b'\\') {
+		return true;
+	}
+	if path.starts_with('/') {
+		return true;
+	}
+	for segment in path.split('/') {
+		if segment.is_empty() || segment == "." || segment == ".." || segment != segment.trim() {
+			return true;
+		}
+	}
+	false
+}
+
 pub enum GMAReader {
 	MemBuffer(Cursor<ArcBytes>),
 	Disk(BufReader<File>),
@@ -120,33 +138,15 @@ impl GMAFile {
 				let size = handle.read_i64::<LittleEndian>()? as u64;
 				let crc = handle.read_u32::<LittleEndian>()?;
 
-				// Detect ../ and skip this entry if found to prevent directory traversal attack
-				{
-					let mut dots = 0;
-					for byte in path.as_bytes() {
-						const DOT: u8 = b'.';
-						const FORWARDS_SLASH: u8 = b'/';
-						const BACKWARDS_SLASH: u8 = b'\\';
+				let next_cursor = match (entry_cursor as u64).checked_add(size as u64) {
+					None => return Err(GMAError::FormatError),
+					Some(next_cursor) => next_cursor,
+				};
 
-						match *byte {
-							DOT => {
-								if dots == 2 {
-									dots = 0;
-								} else {
-									dots += 1;
-								}
-							}
-							FORWARDS_SLASH | BACKWARDS_SLASH => {
-								if dots == 2 {
-									eprintln!("Illegal GMA entry: {}", path);
-									continue 'read_entries;
-								} else {
-									dots = 0;
-								}
-							}
-							_ => dots = 0,
-						}
-					}
+				if is_unsafe_entry_path(&path) {
+					eprintln!("Illegal GMA entry: {}", path);
+					entry_cursor = next_cursor;
+					continue 'read_entries;
 				}
 
 				let entry = GMAEntry {
@@ -156,10 +156,7 @@ impl GMAFile {
 					index: entry_cursor,
 				};
 
-				entry_cursor = match entry_cursor.checked_add(size) {
-					None => return Err(GMAError::FormatError),
-					Some(entry_cursor) => entry_cursor,
-				};
+				entry_cursor = next_cursor;
 
 				entries.insert(path, entry);
 			}
@@ -169,5 +166,85 @@ impl GMAFile {
 
 			Ok(Some(handle))
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::is_unsafe_entry_path;
+
+	#[test]
+	fn rejects_absolute_unix() {
+		assert!(is_unsafe_entry_path("/etc/passwd"));
+		assert!(is_unsafe_entry_path("/"));
+	}
+
+	#[test]
+	fn rejects_absolute_windows_root() {
+		assert!(is_unsafe_entry_path(
+			"\\Program Files (x86)\\Steam\\steamapps\\common\\GarrysMod\\garrysmod\\lua\\bin\\evil.dll"
+		));
+		assert!(is_unsafe_entry_path("\\evil.dll"));
+	}
+
+	#[test]
+	fn rejects_embedded_backslash() {
+		assert!(is_unsafe_entry_path(
+			"Program Files (x86)\\Steam\\steamapps\\common\\GarrysMod\\garrysmod\\lua\\bin\\haha.dll"
+		));
+		assert!(is_unsafe_entry_path("lua\\autorun\\evil.lua"));
+		assert!(is_unsafe_entry_path("foo\\bar"));
+	}
+
+	#[test]
+	fn rejects_segment_whitespace() {
+		assert!(is_unsafe_entry_path(" Files (x86)/Steam/foo"));
+		assert!(is_unsafe_entry_path("lua/ autorun/foo.lua"));
+		assert!(is_unsafe_entry_path("lua/autorun /foo.lua"));
+		assert!(is_unsafe_entry_path("\tfoo/bar"));
+	}
+
+	#[test]
+	fn rejects_drive_letter() {
+		assert!(is_unsafe_entry_path("C:\\evil.dll"));
+		assert!(is_unsafe_entry_path("c:evil.dll"));
+		assert!(is_unsafe_entry_path("file.txt:stream"));
+	}
+
+	#[test]
+	fn rejects_unc_and_long_paths() {
+		assert!(is_unsafe_entry_path("\\\\server\\share\\evil"));
+		assert!(is_unsafe_entry_path("\\\\?\\C:\\evil"));
+	}
+
+	#[test]
+	fn rejects_parent_traversal() {
+		assert!(is_unsafe_entry_path("../etc/passwd"));
+		assert!(is_unsafe_entry_path("..\\evil.dll"));
+		assert!(is_unsafe_entry_path("foo/../../bar"));
+		assert!(is_unsafe_entry_path("foo\\..\\bar"));
+		assert!(is_unsafe_entry_path(".."));
+	}
+
+	#[test]
+	fn rejects_current_dir_segments() {
+		assert!(is_unsafe_entry_path("./foo"));
+		assert!(is_unsafe_entry_path("foo/./bar"));
+		assert!(is_unsafe_entry_path("."));
+	}
+
+	#[test]
+	fn rejects_empty_or_null() {
+		assert!(is_unsafe_entry_path(""));
+		assert!(is_unsafe_entry_path("foo\0bar"));
+		assert!(is_unsafe_entry_path("foo//bar"));
+	}
+
+	#[test]
+	fn accepts_normal_entries() {
+		assert!(!is_unsafe_entry_path("lua/autorun/foo.lua"));
+		assert!(!is_unsafe_entry_path("materials/models/foo.vmt"));
+		assert!(!is_unsafe_entry_path("addon.json"));
+		assert!(!is_unsafe_entry_path("foo..bar/baz"));
 	}
 }

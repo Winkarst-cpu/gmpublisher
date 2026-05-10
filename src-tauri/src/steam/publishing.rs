@@ -8,7 +8,6 @@ use path_slash::{PathBufExt, PathExt};
 use std::{
 	fs::File,
 	io::BufReader,
-	mem::MaybeUninit,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
@@ -91,31 +90,25 @@ impl ContentPath {
 			return Err(PublishError::InvalidContentPath);
 		}
 
-		let mut gma_path: MaybeUninit<PathBuf> = MaybeUninit::uninit();
-		for (i, path) in path
-			.read_dir()?
-			.filter_map(|entry| {
-				entry.ok().and_then(|entry| {
-					let path = entry.path();
-					let extension = path.extension()?;
-					if extension == "gma" {
-						Some(path)
-					} else {
-						None
-					}
-				})
+		let mut gma_path: Option<PathBuf> = None;
+		for path in path.read_dir()?.filter_map(|entry| {
+			entry.ok().and_then(|entry| {
+				let path = entry.path();
+				let extension = path.extension()?;
+				if extension == "gma" {
+					Some(path)
+				} else {
+					None
+				}
 			})
-			.enumerate()
-		{
-			if i > 0 {
+		}) {
+			if gma_path.is_some() {
 				return Err(PublishError::MultipleGMAs);
 			}
-			unsafe {
-				gma_path.as_mut_ptr().write(path);
-			}
+			gma_path = Some(path);
 		}
 
-		Ok(ContentPath(unsafe { gma_path.assume_init() }))
+		gma_path.map(ContentPath).ok_or(PublishError::NoEntries)
 	}
 }
 
@@ -420,17 +413,17 @@ pub fn verify_whitelist(path: PathBuf) -> Result<(Vec<GMAEntry>, u64), PublishEr
 	let mut dedup: HashSet<String> = HashSet::new();
 
 	for (path, relative_path) in WalkDir::new(&path)
-		.follow_links(true)
+		.follow_links(false)
 		.contents_first(true)
 		.into_iter()
 		.filter_map(|entry| {
-			let path = match entry {
-				Ok(entry) => entry.into_path(),
-				Err(err) => match err.path() {
-					Some(path) => path.to_path_buf(),
-					None => return None,
-				},
-			};
+			let entry = entry.ok()?;
+
+			if entry.path_is_symlink() {
+				return None;
+			}
+
+			let path = entry.into_path();
 
 			if path.is_dir() {
 				return None;
